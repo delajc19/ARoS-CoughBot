@@ -2,9 +2,10 @@ import os
 from scipy.io.wavfile import read
 from scipy import signal
 import librosa as lr
-from matplotlib.ticker import LogLocator, FuncFormatter
+from matplotlib.widgets import Button
 import numpy as np
 import matplotlib
+import sounddevice as sd
 
 #Remove matplotlib toolbar
 matplotlib.rcParams['toolbar'] = 'none'
@@ -63,12 +64,14 @@ bone_rec = normalize_audio(audiofile[:,0], audio_dtype) #V2S sensor audio on lef
 air_rec = normalize_audio(audiofile[:,1], audio_dtype) #Air mic audio on right channel
 
 #Estimate PSD using Welch's method, Hanning window
-f_air, Pxx_air = signal.welch(air_rec, Fs, nperseg = 2048)
-f_bone, Pxx_bone = signal.welch(bone_rec, Fs, nperseg = 2048)
+window = 'blackman'
+
+f_air, Pxx_air = signal.welch(air_rec, Fs, nperseg = 2048, window = window)
+f_bone, Pxx_bone = signal.welch(bone_rec, Fs, nperseg = 2048, window = window)
 
 #Compute STFT for spectrogram
-Sxx_air = lr.stft(air_rec)
-Sxx_bone = lr.stft(bone_rec)
+Sxx_air = lr.stft(air_rec, window = window)
+Sxx_bone = lr.stft(bone_rec, window = window)
 
 #Convert to dB
 Sxx_air_dB = lr.amplitude_to_db(abs(Sxx_air), ref = np.max)
@@ -84,6 +87,35 @@ fig, axes = plt.subplots(3, 2, figsize=(20, 10), gridspec_kw={'height_ratios': [
 #Time axis for waveforms
 t_x = np.linspace(0, tlen, int(Fs*tlen))
 
+
+# Create button axes relative to the waveform axes
+
+# Get position of waveform axes in figure coordinates
+pos_air = axes[0,0].get_position()
+pos_bone = axes[0,1].get_position()
+
+# Create smaller axes for buttons just below each waveform subplot
+button_width = pos_air.width * 0.3
+button_height = 0.04
+
+button_ax_air = fig.add_axes([pos_air.x0 - 0.08, pos_air.y0 + 0.2, button_width, button_height])
+button_ax_bone = fig.add_axes([pos_bone.x0, pos_bone.y0 + 0.2, button_width, button_height])
+
+# Create buttons
+button_air = Button(button_ax_air, '▶ Play Air Mic')
+button_bone = Button(button_ax_bone, '▶ Play Bone Mic')
+
+# Define play callbacks (assuming air_rec, bone_rec, Fs already exist)
+def play_air(event):
+    sd.stop()
+    sd.play(air_rec, Fs)
+
+def play_bone(event):
+    sd.stop()
+    sd.play(bone_rec, Fs)
+
+button_air.on_clicked(play_air)
+button_bone.on_clicked(play_bone)
 
 #Air Microphone waveform 
 axes[0,0].plot(t_x, air_rec)

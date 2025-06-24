@@ -40,7 +40,7 @@ channels = 2 #Stereo recording
 frequencies = [100, 500, 1000, 2000, 3000, 5000, 7000, 10000]
 all_tones = []
 
-
+print("Beginning test.")
 for f_i in frequencies:
     #Tone plays for 1/2 the duration of the recording
     tone = lr.tone(f_i, duration = duration, sr = Fs)
@@ -62,3 +62,5 @@ for f_i in frequencies:
         #Noise levels: Quiet, Low Noise, High Noise
         #Sounds: Single Tone (freq [Hz])
     write(filename = os.path.join(recs_dir, f"HN_ST{f_i}Hz.wav"), rate = Fs, data = recording)
+
+print("Test complete!")
