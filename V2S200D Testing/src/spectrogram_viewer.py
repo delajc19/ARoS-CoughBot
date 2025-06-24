@@ -1,5 +1,6 @@
 import os
 from scipy.io.wavfile import read
+from scipy import fft
 from scipy import signal
 import librosa as lr
 from matplotlib.widgets import Button
@@ -59,19 +60,32 @@ tlen = len(audiofile)/Fs
 print(f"Fs = {Fs} kHz, Duration = {tlen:.2f} s")
 print(f"Type = {audiofile.dtype}")
 
+
+#debugging
+# audiofile = audiofile[0:3*Fs, :]
+# tlen = len(audiofile)/Fs
+ 
+
 #Split sterero recording into separate channels and normalize to range [-1.0, 1.0]
 bone_rec = normalize_audio(audiofile[:,0], audio_dtype) #V2S sensor audio on left channel
 air_rec = normalize_audio(audiofile[:,1], audio_dtype) #Air mic audio on right channel
 
-#Estimate PSD using Welch's method, Hanning window
-window = 'blackman'
+#filter out 7kHz resonance from the V2S200D mic
+Q_factor, f0 = 1, 7000 #set Q factor and resonant frequency of notch filter
+b, a = signal.iirnotch(w0 = f0, Q = Q_factor, fs = Fs)
+# bone_rec = signal.filtfilt(b, a, x = bone_rec)
 
-f_air, Pxx_air = signal.welch(air_rec, Fs, nperseg = 2048, window = window)
-f_bone, Pxx_bone = signal.welch(bone_rec, Fs, nperseg = 2048, window = window)
+#Estimate PSD using Welch's method
+window = 'hann' #window type
+n_window = 2048    #window size
+hop_length = n_window // 4
+
+f_air, Pxx_air = signal.welch(air_rec, Fs, nperseg = n_window, window = window)
+f_bone, Pxx_bone = signal.welch(bone_rec, Fs, nperseg = n_window, window = window)
 
 #Compute STFT for spectrogram
-Sxx_air = lr.stft(air_rec, window = window)
-Sxx_bone = lr.stft(bone_rec, window = window)
+Sxx_air = lr.stft(air_rec, window = window, n_fft = n_window, hop_length = hop_length)
+Sxx_bone = lr.stft(bone_rec, window = window, n_fft = n_window, hop_length = hop_length)
 
 #Convert to dB
 Sxx_air_dB = lr.amplitude_to_db(abs(Sxx_air), ref = np.max)
@@ -79,7 +93,6 @@ Sxx_bone_dB = lr.amplitude_to_db(abs(Sxx_bone), ref = np.max)
 
 Pxx_air_dB = 10*np.log10(np.abs(Pxx_air)/np.max(Pxx_air)) #Convert to dB
 Pxx_bone_dB = 10*np.log10(np.abs(Pxx_bone)/np.max(Pxx_bone))
-
 
 #Plot
 fig, axes = plt.subplots(3, 2, figsize=(20, 10), gridspec_kw={'height_ratios': [1, 1, 1.5]}, constrained_layout = True)
@@ -147,7 +160,7 @@ axes[1,1].set_xlabel("Frequency [Hz]")
 axes[1,1].grid(True)
 
 #Set up freq and time axes for spectrogram
-freqs = lr.fft_frequencies(sr = Fs)
+freqs = lr.fft_frequencies(sr = Fs, n_fft = n_window)
 times = lr.frames_to_time(np.arange(Sxx_air.shape[1]), sr=Fs)
 
 #Find global maximum for both spectrograms
@@ -156,27 +169,46 @@ vmax = max(Sxx_air_dB.max(), Sxx_bone_dB.max())
 
 #Air microphone spectrogram
 cmap = 'plasma'
-
-pcm1 = axes[2,0].pcolormesh(times, freqs/1e3, Sxx_air_dB, shading = 'auto', cmap = cmap,)
-                           #vmin = vmin, vmax = vmax)
-axes[2,0].set_title("Air Mic Spectrogram")
+# Air microphone spectrogram (log freq axis)
+pcm1 = lr.display.specshow(Sxx_air_dB,
+                                sr=Fs,
+                                x_axis='time',
+                                y_axis='linear',
+                                cmap=cmap,
+                                ax=axes[2,0])
+axes[2,0].set_title("Air Mic Spectrogram [Hz]")
 axes[2,0].set_xlabel("Time [s]")
 axes[2,0].set_ylabel("Frequency [kHz]")
 
-#Bone microphone waveform
-pcm2 = axes[2,1].pcolormesh(times, freqs/1e3, Sxx_bone_dB , shading = 'auto', cmap = cmap,)
-                             #vmin = vmin, vmax = vmax)
-axes[2,1].set_title("V2S200D Bone Conduction Mic Spectrogram")
+# Bone microphone spectrogram (log freq axis)
+pcm2 = lr.display.specshow(Sxx_bone_dB,
+                                sr=Fs,
+                                x_axis='time',
+                                y_axis='linear',
+                                cmap=cmap,
+                                ax=axes[2,1])
+axes[2,1].set_title("V2S200D Bone Conduction Mic Spectrogram [Hz]")
 axes[2,1].set_xlabel("Time [s]")
 axes[2,1].set_ylabel("Frequency [kHz]")
+
 
 #Add colorboar for spectrogram plots
 fig.colorbar(pcm1, ax=axes[2,0], format='%+2.0f dB')
 fig.colorbar(pcm2, ax=axes[2,1], format='%+2.0f dB')
 fig.subplots_adjust(hspace = 0.3)
 
+# #specify custom tick marks for log y axis
+# f_ticks = [100, 500, 1000, 2000, 3000, 5000, 10000, 20000]
+# axes[2,0].set_yticks(f_ticks)
+# axes[2,0].set_yticklabels([f"{f}" for f in f_ticks])
+
+# axes[2,1].set_yticks(f_ticks)
+# axes[2,1].set_yticklabels([f"{f}" for f in f_ticks])
+
 #Add supertitle to display file name
 fig.suptitle(f"Currently viewing: {file_list[selection]}")
+
+#
 
 plt.show()
 
