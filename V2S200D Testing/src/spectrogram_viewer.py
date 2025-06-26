@@ -9,7 +9,7 @@ import matplotlib
 import sounddevice as sd
 
 #Remove matplotlib toolbar
-matplotlib.rcParams['toolbar'] = 'none'
+# matplotlib.rcParams['toolbar'] = 'none'
 import matplotlib.pyplot as plt
 
 #Initialize constants
@@ -60,20 +60,19 @@ tlen = len(audiofile)/Fs
 print(f"Fs = {Fs} kHz, Duration = {tlen:.2f} s")
 print(f"Type = {audiofile.dtype}")
 
-
-#debugging
-# audiofile = audiofile[0:3*Fs, :]
-# tlen = len(audiofile)/Fs
- 
-
 #Split sterero recording into separate channels and normalize to range [-1.0, 1.0]
 bone_rec = normalize_audio(audiofile[:,0], audio_dtype) #V2S sensor audio on left channel
 air_rec = normalize_audio(audiofile[:,1], audio_dtype) #Air mic audio on right channel
 
 #filter out 7kHz resonance from the V2S200D mic
-Q_factor, f0 = 1, 7000 #set Q factor and resonant frequency of notch filter
+f0 = 7000 #set Q factor and resonant frequency of notch filter
+Q_factor = 1
 b, a = signal.iirnotch(w0 = f0, Q = Q_factor, fs = Fs)
-# bone_rec = signal.filtfilt(b, a, x = bone_rec)
+bone_rec = signal.filtfilt(b, a, x = bone_rec)
+
+#Delay estimation
+#Compute cross correlation of air and bone recording
+#Use argmax to find delay
 
 #Estimate PSD using Welch's method
 window = 'hann' #window type
@@ -87,6 +86,17 @@ f_bone, Pxx_bone = signal.welch(bone_rec, Fs, nperseg = n_window, window = windo
 Sxx_air = lr.stft(air_rec, window = window, n_fft = n_window, hop_length = hop_length)
 Sxx_bone = lr.stft(bone_rec, window = window, n_fft = n_window, hop_length = hop_length)
 
+Sxx_air_mag = np.abs(Sxx_air)
+Sxx_bone_mag = np.abs(Sxx_bone)
+
+threshold_dB = -20
+threshold = 10 ** (threshold_dB/20)
+
+mask = (Sxx_bone_mag >= threshold).astype(np.float32)
+
+Sxx_air = Sxx_air*mask
+air_rec = lr.istft(Sxx_air, window = window, n_fft = n_window, hop_length = hop_length)
+
 #Convert to dB
 Sxx_air_dB = lr.amplitude_to_db(abs(Sxx_air), ref = np.max)
 Sxx_bone_dB = lr.amplitude_to_db(abs(Sxx_bone), ref = np.max)
@@ -99,7 +109,6 @@ fig, axes = plt.subplots(3, 2, figsize=(20, 10), gridspec_kw={'height_ratios': [
 
 #Time axis for waveforms
 t_x = np.linspace(0, tlen, int(Fs*tlen))
-
 
 # Create button axes relative to the waveform axes
 
@@ -150,6 +159,7 @@ axes[1,0].plot(f_air, Pxx_air_dB)
 axes[1,0].set_title("Air Mic Spectrum")
 axes[1,0].set_ylabel("Amplitude [dB]")
 axes[1,0].set_xlabel("Frequency [Hz]")
+axes[1,0].set_ylim([-80, 0])
 axes[1,0].grid(True)
 
 #Bone Microphone spectrum
@@ -157,6 +167,7 @@ axes[1,1].plot(f_bone, Pxx_bone_dB, color = green)
 axes[1,1].set_title("Bone Mic Spectrum")
 axes[1,1].set_ylabel("Amplitude [dB]")
 axes[1,1].set_xlabel("Frequency [Hz]")
+axes[1,1].set_ylim([-80, 0])
 axes[1,1].grid(True)
 
 #Set up freq and time axes for spectrogram
@@ -207,8 +218,6 @@ fig.subplots_adjust(hspace = 0.3)
 
 #Add supertitle to display file name
 fig.suptitle(f"Currently viewing: {file_list[selection]}")
-
-#
 
 plt.show()
 
