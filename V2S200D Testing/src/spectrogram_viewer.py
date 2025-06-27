@@ -55,14 +55,40 @@ Fs, audiofile = read(filename)
 while(audiofile.ndim != 2 or audiofile.shape[1] < 2):
     raise ValueError("Expected a stereo audio file with 2 channels")
 
+
+# audiofile = audiofile[:5*Fs]
 audio_dtype = audiofile.dtype
 tlen = len(audiofile)/Fs
 print(f"Fs = {Fs} kHz, Duration = {tlen:.2f} s")
 print(f"Type = {audiofile.dtype}")
 
+# #example tone for debugging
+# sin_freq = 2000
+# tone = lr.tone(frequency = sin_freq, sr = Fs, duration = tlen)
+
 #Split sterero recording into separate channels and normalize to range [-1.0, 1.0]
 bone_rec = normalize_audio(audiofile[:,0], audio_dtype) #V2S sensor audio on left channel
 air_rec = normalize_audio(audiofile[:,1], audio_dtype) #Air mic audio on right channel
+
+#zero mean
+bone_rec = bone_rec - np.mean(bone_rec)
+air_rec = air_rec - np.mean(air_rec)
+
+#align bone recording and tone 
+Rxx_air = signal.correlate(air_rec, air_rec, mode = 'full')
+Rxy_bone = signal.correlate(bone_rec, air_rec, mode = 'full')
+delay = np.argmax(Rxy_bone) - np.argmax(Rxx_air)
+print(f"Delay estmation: {delay*1000.0/Fs}")
+
+if(delay > 0):
+    bone_rec = bone_rec[delay:]
+    bone_rec = np.pad(bone_rec, (0, delay))
+elif(delay < 0):
+    delay = -1*delay
+    air_rec = air_rec[delay:]
+    air_rec = np.pad(air_rec, (0, delay))
+
+
 
 #filter out 7kHz resonance from the V2S200D mic
 f0 = 7000 #set Q factor and resonant frequency of notch filter
@@ -76,7 +102,7 @@ bone_rec = signal.filtfilt(b, a, x = bone_rec)
 
 #Estimate PSD using Welch's method
 window = 'hann' #window type
-n_window = 2048    #window size
+n_window = 1024    #window size
 hop_length = n_window // 4
 
 f_air, Pxx_air = signal.welch(air_rec, Fs, nperseg = n_window, window = window)
@@ -85,17 +111,6 @@ f_bone, Pxx_bone = signal.welch(bone_rec, Fs, nperseg = n_window, window = windo
 #Compute STFT for spectrogram
 Sxx_air = lr.stft(air_rec, window = window, n_fft = n_window, hop_length = hop_length)
 Sxx_bone = lr.stft(bone_rec, window = window, n_fft = n_window, hop_length = hop_length)
-
-Sxx_air_mag = np.abs(Sxx_air)
-Sxx_bone_mag = np.abs(Sxx_bone)
-
-threshold_dB = -20
-threshold = 10 ** (threshold_dB/20)
-
-mask = (Sxx_bone_mag >= threshold).astype(np.float32)
-
-Sxx_air = Sxx_air*mask
-air_rec = lr.istft(Sxx_air, window = window, n_fft = n_window, hop_length = hop_length)
 
 #Convert to dB
 Sxx_air_dB = lr.amplitude_to_db(abs(Sxx_air), ref = np.max)
@@ -139,7 +154,8 @@ def play_bone(event):
 button_air.on_clicked(play_air)
 button_bone.on_clicked(play_bone)
 
-#Air Microphone waveform 
+#Air Microphone waveform
+
 axes[0,0].plot(t_x, air_rec)
 axes[0,0].set_title("Air Mic Waveform")
 axes[0,0].set_ylabel("D")
