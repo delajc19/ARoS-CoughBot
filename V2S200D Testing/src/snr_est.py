@@ -13,6 +13,7 @@ import os
 import numpy as np
 from scipy.io.wavfile import read
 import scipy.signal as signal
+import matplotlib.pyplot as plt
 
 #Initialize constants
 MAX_INT16 = 32767.0
@@ -28,11 +29,11 @@ def normalize_audio(audio, dtype):
         return audio/MAX_INT32 #Normalize by max int32
 
 #Estimates delay between two audio files and aligns them accordingly
-def align(audio1, audio2):
+def align(audio1, audio2, Fs):
+    Fs = Fs
     Rxx_1 = signal.correlate(audio1, audio1, mode = 'full')
     Rxy_2 = signal.correlate(audio2, audio1, mode = 'full')
     delay = np.argmax(Rxy_2) - np.argmax(Rxx_1)
-    print(f"Delay estmation: {delay*1000.0/Fs:.2f} ms")
 
     if(delay > 0):
         audio2 = audio2[delay:]
@@ -47,6 +48,57 @@ def align(audio1, audio2):
 def rms(signal):
     return np.sqrt(np.mean(signal**2))
 
+#calculate snr for the bone and air conduction recordings of a given file
+#returns: snr bone, snr air, corr coef bone, corr coef air
+def calculate_snr(filename):
+    # audiofile = audiofile[:5*Fs]
+    Fs, audiofile = read(filename)
+    audio_dtype = audiofile.dtype
+    tlen = len(audiofile)/Fs
+    print(f"Fs = {Fs} kHz, Duration = {tlen:.2f} s")
+    print(f"Type = {audiofile.dtype}")
+    
+    #Split sterero recording into separate channels and normalize to range [-1.0, 1.0]
+    bone_rec = normalize_audio(audiofile[:,0], audio_dtype) #V2S sensor audio on left channel
+    air_rec = normalize_audio(audiofile[:,1], audio_dtype) #Air mic audio on right channel
+
+    #zero mean
+    bone_rec = bone_rec - np.mean(bone_rec)
+    air_rec = air_rec - np.mean(air_rec)
+
+    #align bone recording and tone 
+    air_rec, bone_rec = align(air_rec, bone_rec, Fs)
+
+    active_start = int(1*Fs)
+    active_end = int(4*Fs)
+    inactive_start = int(4.5*Fs)
+    inactive_end = int(7.5*Fs)
+
+    active_seg = bone_rec[active_start:active_end]
+    inactive_seg = bone_rec[inactive_start:inactive_end]
+
+    corr_bone = np.corrcoef(active_seg, inactive_seg)[0, 1]
+
+    mixed_rms = rms(active_seg)
+    noise_rms = rms(inactive_seg)
+    signal_rms = np.sqrt(np.maximum(mixed_rms**2 - noise_rms**2, 0))
+    snrbone_db = 20*np.log10(signal_rms/noise_rms)
+
+    active_seg = air_rec[active_start:active_end]
+    inactive_seg = air_rec[inactive_start:inactive_end]
+
+    corr_air = np.corrcoef(active_seg, inactive_seg)[0, 1]
+
+    mixed_rms = rms(active_seg)
+    noise_rms = rms(inactive_seg)
+    signal_rms = np.sqrt(np.maximum(mixed_rms**2 - noise_rms**2, 0))
+    snrair_db = 20*np.log10(signal_rms/noise_rms)
+
+    return snrbone_db, snrair_db, corr_bone, corr_air
+
+
+    
+
 #Select audio file
 audio_dir = "..\\stereo recordings\\"
 
@@ -57,68 +109,35 @@ if not os.path.exists(audio_dir):
 file_list = sorted(os.listdir(audio_dir))
 num_files = len(file_list)
 
+frequencies = [100, 500, 1000, 2000, 3000, 5000, 7000, 10000]
+
+
+snrvals = np.zeros((4,8,2), float)
+corrvals = np.zeros((4,8,2), float)
+
+snrvals[3,:,1] = frequencies = [100, 500, 1000, 2000, 3000, 5000, 7000, 10000]
+corrvals[3,:,1] = frequencies = [100, 500, 1000, 2000, 3000, 5000, 7000, 10000]
+
+
+j = 0
 for i in range(num_files):
-    print(f"{i+1} {file_list[i]}")
+    noise_idx = -1
+    if "HN_ST" in file_list[i]:
+        noise_idx = 0
+    if "LN_ST" in file_list[i]:
+        noise_idx = 1
+    if "Q_ST" in file_list[i]:
+        noise_idx = 2
+    
+    filename = os.path.join(audio_dir, file_list[i])
+    if(noise_idx >= 0):
+        if j > 7: j = 0
+        snr_bone, snr_air, corr_bone, corr_air = calculate_snr(filename)
+        snrvals[noise_idx,j,0] = snr_bone
+        snrvals[noise_idx,j,1] = snr_air
+        corrvals[noise_idx,j,0] = corr_bone
+        corrvals[noise_idx,j,1] = corr_air
+        j += 1
 
 
-selection = int(input("Please input the index of the audio file you wish to analyze: ")) - 1
-
-#Ensure user inputs valid index
-while(selection < 0 or selection >= num_files):
-    selection = int(input(f"Invalid input, please input a value in the range [1, {num_files}]: ")) - 1
-
-filename = os.path.join(audio_dir, file_list[selection])
-
-#Load selected audio file
-Fs, audiofile = read(filename)
-
-#Ensure user selects stereo file
-while(audiofile.ndim != 2 or audiofile.shape[1] < 2):
-    raise ValueError("Expected a stereo audio file with 2 channels")
-
-print(f"File selected: {file_list[selection]}")
-
-# audiofile = audiofile[:5*Fs]
-audio_dtype = audiofile.dtype
-tlen = len(audiofile)/Fs
-print(f"Fs = {Fs} kHz, Duration = {tlen:.2f} s")
-print(f"Type = {audiofile.dtype}")
-
-# #example tone for debugging
-# sin_freq = 2000
-# tone = lr.tone(frequency = sin_freq, sr = Fs, duration = tlen)
-
-#Split sterero recording into separate channels and normalize to range [-1.0, 1.0]
-bone_rec = normalize_audio(audiofile[:,0], audio_dtype) #V2S sensor audio on left channel
-air_rec = normalize_audio(audiofile[:,1], audio_dtype) #Air mic audio on right channel
-
-#zero mean
-bone_rec = bone_rec - np.mean(bone_rec)
-air_rec = air_rec - np.mean(air_rec)
-
-#align bone recording and tone 
-air_rec, bone_rec = align(air_rec, bone_rec)
-
-active_start = int(1*Fs)
-active_end = int(active_start + 4*Fs)
-inactive_start = int(4.5*Fs)
-inactive_end = int(7.5*Fs)
-
-mixed_rms = rms(bone_rec[active_start:active_end])
-noise_rms = rms(bone_rec[inactive_start:inactive_end])
-signal_rms = np.sqrt(np.maximum(mixed_rms**2 - noise_rms**2, 1e-12))
-signal_rms = mixed_rms #for debugging
-print(f"BCM Noise power: {20*np.log10(noise_rms):.2f} dBFS")
-snrbone_db = 20*np.log10(signal_rms/noise_rms)
-
-mixed_rms = rms(air_rec[active_start:active_end])
-noise_rms = rms(air_rec[inactive_start:inactive_end])
-signal_rms = np.sqrt(np.maximum(mixed_rms**2 - noise_rms**2, 1e-12))
-signal_rms = mixed_rms #for debugging
-print(f"ACM Noise power: {20*np.log10(noise_rms):.2f} dBFS")
-snrair_db = 20*np.log10(signal_rms/noise_rms)
-
-print(f"SNR BONE: {snrbone_db:.2f} dB")
-print(f"SNR AIR: {snrair_db:.2f} dB")
-
-
+plt.show()
