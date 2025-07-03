@@ -15,6 +15,7 @@ from scipy.io.wavfile import read
 import scipy.signal as signal
 import matplotlib.pyplot as plt
 import csv
+import dcor
 
 #Initialize constants
 MAX_INT16 = 32767.0
@@ -79,6 +80,7 @@ def calculate_snr(filename):
     inactive_seg = bone_rec[inactive_start:inactive_end]
 
     corr_bone = np.corrcoef(active_seg, inactive_seg)[0, 1]
+    # dcorr_bone = dcor.distance_correlation(active_seg, inactive_seg)
 
     mixed_rms = rms(active_seg)
     noise_rms = rms(inactive_seg)
@@ -89,6 +91,7 @@ def calculate_snr(filename):
     inactive_seg = air_rec[inactive_start:inactive_end]
 
     corr_air = np.corrcoef(active_seg, inactive_seg)[0, 1]
+    # dcorr_air = dcor.distance_correlation(active_seg, inactive_seg)
 
     mixed_rms = rms(active_seg)
     noise_rms = rms(inactive_seg)
@@ -112,6 +115,8 @@ num_files = len(file_list)
 
 snrvals = np.zeros((3,8,2), float)
 corrvals = np.zeros((3,8,2), float)
+# dcorrvals = np.zeros((3,8,2), float)
+
 frequencies = [10000, 1000, 100, 2000, 3000, 5000, 500, 7000]
 # snrvals[3,:,1] = frequencies 
 # corrvals[3,:,1] = frequencies 
@@ -130,11 +135,13 @@ for i in range(num_files):
     filename = os.path.join(audio_dir, file_list[i])
     if(noise_idx >= 0):
         if j > 7: j = 0
-        snr_bone, snr_air, corr_bone, corr_air = calculate_snr(filename)
+        snr_bone, snr_air, corr_bone, corr_air, dcorr_bone, dcorr_air = calculate_snr(filename)
         snrvals[noise_idx,j,0] = snr_bone
         snrvals[noise_idx,j,1] = snr_air
         corrvals[noise_idx,j,0] = corr_bone
         corrvals[noise_idx,j,1] = corr_air
+        # dcorrvals[noise_idx,j,0] = corr_bone
+        # dcorrvals[noise_idx,j,1] = corr_air
         j += 1
 
 #Write values to .csv
@@ -165,6 +172,20 @@ with open("../csv files/corrvals.csv", mode="w", newline="") as file:
         for j in range(corrvals.shape[1]):
             row[j] = f"{corrvals[i, j, 0]:.2f}, {corrvals[i, j, 1]:.2f}"
         writer.writerow(row)
+
+# with open("../csv files/dcorrvals.csv", mode="w", newline="") as file:
+#     writer = csv.writer(file)
+
+#     row = ['','','','','','','','']
+
+#     for i in range(len(frequencies)):
+#         row[i] = f"{frequencies[i]:d} [Hz]"
+#     writer.writerow(row)  
+
+#     for i in range(dcorrvals.shape[0]):
+#         for j in range(dcorrvals.shape[1]):
+#             row[j] = f"{dcorrvals[i, j, 0]:.2f}, {dcorrvals[i, j, 1]:.2f}"
+#         writer.writerow(row)
 
 
 

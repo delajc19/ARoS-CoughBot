@@ -59,7 +59,7 @@ while(audiofile.ndim != 2 or audiofile.shape[1] < 2):
 # audiofile = audiofile[:5*Fs]
 audio_dtype = audiofile.dtype
 tlen = len(audiofile)/Fs
-print(f"Fs = {Fs} kHz, Duration = {tlen:.2f} s")
+print(f"Fs = {Fs} Hz, Duration = {tlen:.2f} s")
 print(f"Type = {audiofile.dtype}")
 
 # #example tone for debugging
@@ -205,7 +205,7 @@ pcm1 = lr.display.specshow(Sxx_air_dB,
                                 ax=axes[2,0])
 axes[2,0].set_title("Air Mic Spectrogram [Hz]")
 axes[2,0].set_xlabel("Time [s]")
-axes[2,0].set_ylabel("Frequency [kHz]")
+axes[2,0].set_ylabel("Frequency [Hz]")
 
 # Bone microphone spectrogram (log freq axis)
 pcm2 = lr.display.specshow(Sxx_bone_dB,
@@ -216,7 +216,7 @@ pcm2 = lr.display.specshow(Sxx_bone_dB,
                                 ax=axes[2,1])
 axes[2,1].set_title("V2S200D Bone Conduction Mic Spectrogram [Hz]")
 axes[2,1].set_xlabel("Time [s]")
-axes[2,1].set_ylabel("Frequency [kHz]")
+axes[2,1].set_ylabel("Frequency [Hz]")
 
 
 #Add colorboar for spectrogram plots
