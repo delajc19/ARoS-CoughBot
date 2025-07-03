@@ -14,6 +14,7 @@ import numpy as np
 from scipy.io.wavfile import read
 import scipy.signal as signal
 import matplotlib.pyplot as plt
+import csv
 
 #Initialize constants
 MAX_INT16 = 32767.0
@@ -55,8 +56,8 @@ def calculate_snr(filename):
     Fs, audiofile = read(filename)
     audio_dtype = audiofile.dtype
     tlen = len(audiofile)/Fs
-    print(f"Fs = {Fs} kHz, Duration = {tlen:.2f} s")
-    print(f"Type = {audiofile.dtype}")
+    # print(f"Fs = {Fs} kHz, Duration = {tlen:.2f} s")
+    # print(f"Type = {audiofile.dtype}")
     
     #Split sterero recording into separate channels and normalize to range [-1.0, 1.0]
     bone_rec = normalize_audio(audiofile[:,0], audio_dtype) #V2S sensor audio on left channel
@@ -109,14 +110,11 @@ if not os.path.exists(audio_dir):
 file_list = sorted(os.listdir(audio_dir))
 num_files = len(file_list)
 
-frequencies = [100, 500, 1000, 2000, 3000, 5000, 7000, 10000]
-
-
-snrvals = np.zeros((4,8,2), float)
-corrvals = np.zeros((4,8,2), float)
+snrvals = np.zeros((3,8,2), float)
+corrvals = np.zeros((3,8,2), float)
 frequencies = [10000, 1000, 100, 2000, 3000, 5000, 500, 7000]
-snrvals[3,:,1] = frequencies 
-corrvals[3,:,1] = frequencies 
+# snrvals[3,:,1] = frequencies 
+# corrvals[3,:,1] = frequencies 
 
 
 j = 0
@@ -138,6 +136,36 @@ for i in range(num_files):
         corrvals[noise_idx,j,0] = corr_bone
         corrvals[noise_idx,j,1] = corr_air
         j += 1
+
+#Write values to .csv
+with open("../csv files/snrvals.csv", mode="w", newline="") as file:
+    writer = csv.writer(file)
+
+    row = ['','','','','','','','']
+
+    for i in range(len(frequencies)):
+        row[i] = f"{frequencies[i]:d} [Hz]"
+    writer.writerow(row)
+
+    for i in range(snrvals.shape[0]):
+        for j in range(snrvals.shape[1]):
+            row[j] = f"{snrvals[i, j, 0]:.2f}, {snrvals[i, j, 1]:.2f}"
+        writer.writerow(row)
+
+with open("../csv files/corrvals.csv", mode="w", newline="") as file:
+    writer = csv.writer(file)
+
+    row = ['','','','','','','','']
+
+    for i in range(len(frequencies)):
+        row[i] = f"{frequencies[i]:d} [Hz]"
+    writer.writerow(row)  
+
+    for i in range(corrvals.shape[0]):
+        for j in range(corrvals.shape[1]):
+            row[j] = f"{corrvals[i, j, 0]:.2f}, {corrvals[i, j, 1]:.2f}"
+        writer.writerow(row)
+
 
 
 plt.show()
