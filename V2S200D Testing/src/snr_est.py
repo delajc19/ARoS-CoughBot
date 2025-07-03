@@ -114,9 +114,9 @@ frequencies = [100, 500, 1000, 2000, 3000, 5000, 7000, 10000]
 
 snrvals = np.zeros((4,8,2), float)
 corrvals = np.zeros((4,8,2), float)
-
-snrvals[3,:,1] = frequencies = [100, 500, 1000, 2000, 3000, 5000, 7000, 10000]
-corrvals[3,:,1] = frequencies = [100, 500, 1000, 2000, 3000, 5000, 7000, 10000]
+frequencies = [10000, 1000, 100, 2000, 3000, 5000, 500, 7000]
+snrvals[3,:,1] = frequencies 
+corrvals[3,:,1] = frequencies 
 
 
 j = 0
