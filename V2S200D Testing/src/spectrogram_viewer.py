@@ -190,17 +190,13 @@ axes[1,1].grid(True)
 freqs = lr.fft_frequencies(sr = Fs, n_fft = n_window)
 times = lr.frames_to_time(np.arange(Sxx_air.shape[1]), sr=Fs)
 
-#Find global maximum for both spectrograms
-vmin = min(Sxx_air_dB.min(), Sxx_bone_dB.min())
-vmax = max(Sxx_air_dB.max(), Sxx_bone_dB.max())
-
 #Air microphone spectrogram
 cmap = 'plasma'
 # Air microphone spectrogram (log freq axis)
 pcm1 = lr.display.specshow(Sxx_air_dB,
                                 sr=Fs,
                                 x_axis='time',
-                                y_axis='linear',
+                                y_axis='mel',
                                 cmap=cmap,
                                 ax=axes[2,0])
 axes[2,0].set_title("Air Mic Spectrogram [Hz]")
@@ -211,7 +207,7 @@ axes[2,0].set_ylabel("Frequency [Hz]")
 pcm2 = lr.display.specshow(Sxx_bone_dB,
                                 sr=Fs,
                                 x_axis='time',
-                                y_axis='linear',
+                                y_axis='mel',
                                 cmap=cmap,
                                 ax=axes[2,1])
 axes[2,1].set_title("V2S200D Bone Conduction Mic Spectrogram [Hz]")
