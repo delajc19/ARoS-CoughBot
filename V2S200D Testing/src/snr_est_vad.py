@@ -263,6 +263,8 @@ axes2[1].legend()
 
 plt.figure(3)
 nst = np.linspace(0,len(stitched_airspeech)/Fs, len(stitched_airspeech))
+plt.title('Concatenated Active Audio Segments')
+plt.ylim((-1,1))
 plt.plot(nst, stitched_airspeech)
 
 
