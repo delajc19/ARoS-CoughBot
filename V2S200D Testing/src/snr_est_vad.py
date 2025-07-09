@@ -44,7 +44,7 @@ def stitch(input_list):
     stitched = np.array(input_list[0])
     for i in range(len(input_list)-1):
         stitched = np.append(stitched, input_list[i+1])
-    return stitched
+    return stitched.astype(np.float32)
 
 #sort list by length (longest to shortest)
 def sort_by_len(input_list):
@@ -119,7 +119,7 @@ bone_rec = signal.filtfilt(b, a, x = bone_rec)
 #initialize parameters for VAD
 frame_length = 40
 frame_shift = frame_length // 4
-energy_threshold = 0.01
+energy_threshold = 0.005
 pre_emphasis = 0.95
 
 #instantiate vad object
@@ -135,15 +135,15 @@ voice_inactivity = 1 - voice_activity
 
 
 #smooth the mask with a raised cosine window
-Nx = 10
+Nx = 20
 window = signal.get_window('hann', Nx = Nx)
 mask = signal.convolve(voice_activity, window, mode = 'same')
 #normalize mask
 mask = mask/np.max(mask)
 
-#lp filter the voice activity array
+#lp filter the mask
 # b, a = signal.iirdesign(0.3, 0.7, 1, 40, ftype = 'cheby1')
-# voice_activity = signal.lfilter(b,a, x = voice_activity)
+# mask = signal.lfilter(b,a, x = voice_activity)
 
 #initialize vars for tracking active/inactive time
 active_time = 0
@@ -268,4 +268,4 @@ plt.plot(nst, stitched_airspeech)
 
 plt.show()
 
-sd.play(stitched_airspeech, Fs)
+sd.play(output, Fs)
