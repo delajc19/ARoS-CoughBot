@@ -197,6 +197,12 @@ stitched_bonespeech = stitch(segmented_bonespeech)
 stitched_airnoise = stitch(segmented_airnoise)
 stitched_bonenoise = stitch(segmented_bonenoise)
 
+#zero mean
+stitched_airspeech = stitched_airspeech - np.mean(stitched_airspeech)
+stitched_bonespeech = stitched_bonespeech - np.mean(stitched_bonespeech)
+stitched_airnoise = stitched_airnoise - np.mean(stitched_airnoise)
+sitched_bonenoise = stitched_bonenoise - np.mean(stitched_bonenoise)
+
 #truncate the longer segment to equal the length of the shorter segment
 minlen = min(len(stitched_airnoise),len(stitched_airspeech))
 stitched_airspeech = stitched_airspeech[0:minlen]
