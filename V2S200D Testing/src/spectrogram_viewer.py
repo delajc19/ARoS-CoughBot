@@ -7,10 +7,11 @@ from matplotlib.widgets import Button
 import numpy as np
 import matplotlib
 import sounddevice as sd
-
-#Remove matplotlib toolbar
-# matplotlib.rcParams['toolbar'] = 'none'
 import matplotlib.pyplot as plt
+import tkinter as tk
+from tkinter import filedialog
+
+#%%Computations
 
 #Initialize constants
 MAX_INT16 = 32767.0
@@ -25,31 +26,77 @@ def normalize_audio(audio, dtype):
     elif(dtype=="int32"):
         return audio/MAX_INT32 #Normalize by max int32
 
+def select_audio_files(n, title="Select a Stereo Audio File"):
+    """
+    Open a file dialog to select `n` audio files in order.
+    
+    Returns:
+        List of file paths in the selected order.
+    """
+    root = tk.Tk()
+    root.withdraw()  # hide the main window
+    file_path = filedialog.askopenfilenames(
+        title=title,
+        filetypes=[("WAV files", "*.wav")],
+        multiple=True
+    )
+    root.destroy()
+
+    if len(file_path) != n:
+        raise ValueError(f"Expected {n} files, but got {len(file_path)}")
+    return file_path
+
+def sensor_spectral_noise(n_window, window, hop_length):
+    Fs, stereonoise = read("../stereo recordings/silence.wav")
+    n_air = normalize_audio(stereonoise[:,1],dtype = stereonoise.dtype)
+    n_bone = normalize_audio(stereonoise[:,0],dtype = stereonoise.dtype)
+
+    _, N_air_PSD = signal.welch(n_air, Fs, nperseg = n_window, window = window, noverlap=n_window//4)
+    _, N_bone_PSD = signal.welch(n_bone, Fs, nperseg = n_window, window = window, noverlap=n_window//4)
+
+    N_air_amp = np.average(abs(lr.stft(n_air, window = window, n_fft = n_window, hop_length = hop_length)))
+    N_bone_amp = np.average(abs(lr.stft(n_bone, window = window, n_fft = n_window, hop_length = hop_length)))
+
+    return N_air_amp, N_air_PSD, N_bone_amp, N_bone_PSD
+
+def align(air_rec, bone_rec):
+    #zero mean
+    bone_rec = bone_rec - np.mean(bone_rec)
+    air_rec = air_rec - np.mean(air_rec)
+
+    Rxx_air = signal.correlate(air_rec, air_rec, mode = 'full')
+    Rxy_bone = signal.correlate(bone_rec, air_rec, mode = 'full')
+    delay = np.argmax(Rxy_bone) - np.argmax(Rxx_air)
+    print(f"Delay estmation: {delay*1000.0/Fs}")
+
+    if(delay > 0):
+        bone_rec = bone_rec[delay:]
+        bone_rec = np.pad(bone_rec, (0, delay))
+    elif(delay < 0):
+        delay = -1*delay
+        air_rec = air_rec[delay:]
+        air_rec = np.pad(air_rec, (0, delay))
+    return air_rec, bone_rec
 
 #Select audio file
-audio_dir = "..\\stereo recordings\\"
+# audio_dir = "..\\stereo recordings\\"
 
-if not os.path.exists(audio_dir):
-    raise FileNotFoundError(f"Directory does not exist: {os.path.abspath(audio_dir)}")
+# if not os.path.exists(audio_dir):
+#     raise FileNotFoundError(f"Directory does not exist: {os.path.abspath(audio_dir)}")
 
-#List files
-file_list = os.listdir(audio_dir)
-num_files = len(file_list)
+# #List files
+# file_list = os.listdir(audio_dir)
+# num_files = len(file_list)
 
-for i in range(num_files):
-    print(f"{i+1} {file_list[i]}")
+# for i in range(num_files):
+#     print(f"{i+1} {file_list[i]}")
 
 
-selection = int(input("Please input the index of the audio file you wish to analyze: ")) - 1
-
-#Ensure user inputs valid index
-while(selection < 0 or selection >= num_files):
-    selection = int(input(f"Invalid input, please input a value in the range [1, {num_files}]: ")) - 1
-
-filename = os.path.join(audio_dir, file_list[selection])
+filename = select_audio_files(n = 1)[0]
 
 #Load selected audio file
 Fs, audiofile = read(filename)
+print(f"Currently viewing: {filename}")
 
 #Ensure user selects stereo file
 while(audiofile.ndim != 2 or audiofile.shape[1] < 2):
@@ -62,39 +109,31 @@ tlen = len(audiofile)/Fs
 print(f"Fs = {Fs} Hz, Duration = {tlen:.2f} s")
 print(f"Type = {audiofile.dtype}")
 
-# #example tone for debugging
-# sin_freq = 2000
-# tone = lr.tone(frequency = sin_freq, sr = Fs, duration = tlen)
-
 #Split sterero recording into separate channels and normalize to range [-1.0, 1.0]
 bone_rec = normalize_audio(audiofile[:,0], audio_dtype) #V2S sensor audio on left channel
 air_rec = normalize_audio(audiofile[:,1], audio_dtype) #Air mic audio on right channel
 
-#zero mean
-bone_rec = bone_rec - np.mean(bone_rec)
-air_rec = air_rec - np.mean(air_rec)
+#align bone recording and air recording 
+# air_rec, bone_rec = align(air_rec,bone_rec)
 
-#align bone recording and tone 
-Rxx_air = signal.correlate(air_rec, air_rec, mode = 'full')
-Rxy_bone = signal.correlate(bone_rec, air_rec, mode = 'full')
-delay = np.argmax(Rxy_bone) - np.argmax(Rxx_air)
-print(f"Delay estmation: {delay*1000.0/Fs}")
 
-if(delay > 0):
-    bone_rec = bone_rec[delay:]
-    bone_rec = np.pad(bone_rec, (0, delay))
-elif(delay < 0):
-    delay = -1*delay
-    air_rec = air_rec[delay:]
-    air_rec = np.pad(air_rec, (0, delay))
-
+#Normalized gain
+peak_air = max(abs(air_rec))
+peak_bone = max(abs(bone_rec))
+gain = peak_air/peak_bone
+# bone_rec = gain*bone_rec
 
 
 #filter out 7kHz resonance from the V2S200D mic
 f0 = 7000 #set Q factor and resonant frequency of notch filter
 Q_factor = 1
 b, a = signal.iirnotch(w0 = f0, Q = Q_factor, fs = Fs)
-bone_rec = signal.filtfilt(b, a, x = bone_rec)
+alpha = 0.7 #filter influence
+bone_rec = alpha*signal.filtfilt(b, a, x = bone_rec) + (1-alpha)*bone_rec
+
+# b, a = signal.iirdesign(0.01, 0.001, 1, 40, ftype = 'butter')
+# bone_rec = signal.lfilter(b,a, x = bone_rec)
+# air_rec = signal.lfilter(b,a, x = air_rec)
 
 #Delay estimation
 #Compute cross correlation of air and bone recording
@@ -102,29 +141,66 @@ bone_rec = signal.filtfilt(b, a, x = bone_rec)
 
 #Estimate PSD using Welch's method
 window = 'hann' #window type
-n_window = 1024    #window size
+n_window = 16384    #window size
 hop_length = n_window // 4
 
-f_air, Pxx_air = signal.welch(air_rec, Fs, nperseg = n_window, window = window)
-f_bone, Pxx_bone = signal.welch(bone_rec, Fs, nperseg = n_window, window = window)
+f_air, Pxx_air = signal.welch(air_rec, Fs, nperseg = n_window, window = window, noverlap=n_window//2)
+f_bone, Pxx_bone = signal.welch(bone_rec, Fs, nperseg = n_window, window = window, noverlap=n_window//2)
+
+#load noise spectra
+N_air_amp, N_air_PSD, N_bone_amp, N_bone_PSD = sensor_spectral_noise(n_window=n_window, window=window, hop_length=hop_length)
 
 #Compute STFT for spectrogram
 Sxx_air = lr.stft(air_rec, window = window, n_fft = n_window, hop_length = hop_length)
 Sxx_bone = lr.stft(bone_rec, window = window, n_fft = n_window, hop_length = hop_length)
 
+#Subtract noise spectra
+Sxx_air = Sxx_air - N_air_amp
+Sxx_bone = Sxx_bone - N_bone_amp
+
+Pxx_air_new = Pxx_air - N_air_PSD
+Pxx_bone_new = Pxx_bone - N_bone_PSD
+
+#convert after noise subtraction
+air_rec = lr.istft(Sxx_air, window = window, n_fft = n_window, hop_length = hop_length)
+bone_rec = lr.istft(Sxx_bone, window = window, n_fft = n_window, hop_length = hop_length)
+
+HSxx = Sxx_air/Sxx_bone
+
 #Convert to dB
 Sxx_air_dB = lr.amplitude_to_db(abs(Sxx_air), ref = np.max)
 Sxx_bone_dB = lr.amplitude_to_db(abs(Sxx_bone), ref = np.max)
 
-Pxx_air_dB = 10*np.log10(np.abs(Pxx_air)/np.max(Pxx_air)) #Convert to dB
-Pxx_bone_dB = 10*np.log10(np.abs(Pxx_bone)/np.max(Pxx_bone))
+ref_val = np.max([np.max(np.abs(N_air_PSD)), np.max(np.abs(Pxx_air)), np.max(np.abs(Pxx_air_new))])
 
-#Plot
+Pxx_air_dB = 10*np.log10(np.abs(Pxx_air)/ref_val) #Convert to dB
+Pxx_air_new_dB = 10*np.log10(np.abs(Pxx_air_new)/ref_val) #Convert to dB
+
+ref_val = np.max([np.max(np.abs(N_bone_PSD)), np.max(np.abs(Pxx_bone)), np.max(np.abs(Pxx_bone_new))])
+Pxx_bone_dB = 10*np.log10(np.abs(Pxx_bone)/ref_val)
+Pxx_bone_new_dB = 10*np.log10(np.abs(Pxx_bone_new)/ref_val)
+
+HSxx_dB = lr.amplitude_to_db(abs(HSxx), ref = np.max)
+
+HSxx_mag = np.abs(HSxx)
+HSxx_mag[HSxx_mag == 0] = 1e-10  # avoid log(0)
+HSxx_dB = 20 * np.log10(HSxx_mag / np.max(HSxx_mag))
+
+#Compute transfer function to compare air and bone conduction amplitude
+Hxx_welch = Pxx_air/Pxx_bone
+
+Hxx_avgstft = np.average(HSxx_mag, axis = 1, keepdims=True)
+
+Hxx_avgstft_dB = 10*np.log10(np.abs(Hxx_avgstft))
+Hxx_welch_dB = 10*np.log10(np.abs(Hxx_welch))
+
+
+
+#%%Plot
 fig, axes = plt.subplots(3, 2, figsize=(20, 10), gridspec_kw={'height_ratios': [1, 1, 1.5]}, constrained_layout = True)
 
 #Time axis for waveforms
-t_x = np.linspace(0, tlen, int(Fs*tlen))
-
+t_x = np.arange(len(air_rec)) / Fs
 # Create button axes relative to the waveform axes
 
 # Get position of waveform axes in figure coordinates
@@ -155,7 +231,6 @@ button_air.on_clicked(play_air)
 button_bone.on_clicked(play_bone)
 
 #Air Microphone waveform
-
 axes[0,0].plot(t_x, air_rec)
 axes[0,0].set_title("Air Mic Waveform")
 axes[0,0].set_ylabel("D")
@@ -171,32 +246,45 @@ axes[0,1].set_ylim([-1.0,1.0])
 axes[0,1].grid(True)
 
 #Air Microphone spectrum
+ref_val = np.max([np.max(np.abs(N_air_PSD)), np.max(np.abs(Pxx_air))])
+
 axes[1,0].plot(f_air, Pxx_air_dB)
+axes[1,0].plot(f_air,10*np.log10(np.abs(N_air_PSD)/ref_val))
+axes[1,0].plot(f_air,Pxx_air_new_dB)
 axes[1,0].set_title("Air Mic Spectrum")
-axes[1,0].set_ylabel("Amplitude [dB]")
+axes[1,0].set_ylabel("Power Spectral Density [dB]")
 axes[1,0].set_xlabel("Frequency [Hz]")
-axes[1,0].set_ylim([-80, 0])
+axes[1,0].set_xlim([0,2000])
+# axes[1,0].set_ylim([-20, 0])
 axes[1,0].grid(True)
+axes[1,0].legend(["PSD","Noise PSD", "Speech - Noise PSD"])
 
 #Bone Microphone spectrum
+
 axes[1,1].plot(f_bone, Pxx_bone_dB, color = green)
+axes[1,1].plot(f_bone,10*np.log10(np.abs(N_bone_PSD)/ref_val))
+axes[1,1].plot(f_bone,Pxx_bone_new_dB)
 axes[1,1].set_title("Bone Mic Spectrum")
-axes[1,1].set_ylabel("Amplitude [dB]")
+axes[1,1].set_ylabel("Power Spectral Density [dB]")
 axes[1,1].set_xlabel("Frequency [Hz]")
-axes[1,1].set_ylim([-80, 0])
+axes[1,1].set_xlim([0,2000])
+# axes[1,1].set_ylim([-20, 0])
 axes[1,1].grid(True)
+axes[1,1].legend(["PSD","Noise PSD", "Speech - Noise PSD"])
 
 #Set up freq and time axes for spectrogram
 freqs = lr.fft_frequencies(sr = Fs, n_fft = n_window)
-times = lr.frames_to_time(np.arange(Sxx_air.shape[1]), sr=Fs)
+times = lr.frames_to_time(np.arange(Sxx_bone.shape[1]), sr=Fs, hop_length=hop_length, n_fft=n_window)
 
 #Air microphone spectrogram
-cmap = 'plasma'
+cmap = 'inferno'
 # Air microphone spectrogram (log freq axis)
 pcm1 = lr.display.specshow(Sxx_air_dB,
                                 sr=Fs,
+                                hop_length = hop_length,
+                                n_fft = n_window,
                                 x_axis='time',
-                                y_axis='mel',
+                                y_axis='log',
                                 cmap=cmap,
                                 ax=axes[2,0])
 axes[2,0].set_title("Air Mic Spectrogram [Hz]")
@@ -207,7 +295,7 @@ axes[2,0].set_ylabel("Frequency [Hz]")
 pcm2 = lr.display.specshow(Sxx_bone_dB,
                                 sr=Fs,
                                 x_axis='time',
-                                y_axis='mel',
+                                y_axis='log',
                                 cmap=cmap,
                                 ax=axes[2,1])
 axes[2,1].set_title("V2S200D Bone Conduction Mic Spectrogram [Hz]")
@@ -229,8 +317,29 @@ fig.subplots_adjust(hspace = 0.3)
 # axes[2,1].set_yticklabels([f"{f}" for f in f_ticks])
 
 #Add supertitle to display file name
-fig.suptitle(f"Currently viewing: {file_list[selection]}")
+fig.suptitle(f"Currently viewing: {filename}")
 
+fig, axes = plt.subplots(2,1, figsize = (15,10))
+# axes[0].plot(f_air, Hxx_welch_dB)
+axes[0].plot(f_air, Hxx_avgstft_dB)
+# axes[0].plot(f_air, Hxx_welch_dB/Hxx_avgstft_dB[:,0])
+axes[0].set_xlabel("Frequency [Hz]")
+axes[0].set_ylabel("Amplitude Gain [dB]")
+axes[0].set_title("Transfer Function ACM/BCM")
+axes[0].legend()
+pcm3 = lr.display.specshow(HSxx_dB,
+                                sr=Fs,
+                                hop_length = hop_length,
+                                n_fft = n_window,
+                                x_axis='time',
+                                y_axis='log',
+                                cmap=cmap,
+                                ax=axes[1])
+
+fig.colorbar(pcm3, ax=axes[1], format='%+2.0f dB')
+fig.subplots_adjust(wspace = 0.3)
 plt.show()
 
 
+
+# %%
