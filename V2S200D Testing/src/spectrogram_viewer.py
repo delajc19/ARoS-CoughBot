@@ -78,6 +78,13 @@ def align(air_rec, bone_rec):
         air_rec = np.pad(air_rec, (0, delay))
     return air_rec, bone_rec
 
+def butter_bp(lowcut, highcut, fs, order):
+    w1 = 2*lowcut / fs
+    w2 = 2*highcut/ fs
+    b, a = signal.butter(order,[w1, w2], btype = 'bandpass', analog = False)
+    return b, a
+    
+
 #Select audio file
 # audio_dir = "..\\stereo recordings\\"
 
@@ -121,7 +128,7 @@ air_rec = normalize_audio(audiofile[:,1], audio_dtype) #Air mic audio on right c
 peak_air = max(abs(air_rec))
 peak_bone = max(abs(bone_rec))
 gain = peak_air/peak_bone
-# bone_rec = gain*bone_rec
+bone_rec = gain*bone_rec
 
 
 #filter out 7kHz resonance from the V2S200D mic
@@ -131,9 +138,11 @@ b, a = signal.iirnotch(w0 = f0, Q = Q_factor, fs = Fs)
 alpha = 0.7 #filter influence
 bone_rec = alpha*signal.filtfilt(b, a, x = bone_rec) + (1-alpha)*bone_rec
 
-# b, a = signal.iirdesign(0.01, 0.001, 1, 40, ftype = 'butter')
-# bone_rec = signal.lfilter(b,a, x = bone_rec)
-# air_rec = signal.lfilter(b,a, x = air_rec)
+#bandpass filter to focus analysis window
+b, a = butter_bp(60,3000,Fs,5)
+air_rec = signal.filtfilt(b, a, air_rec)
+bone_rec= signal.filtfilt(b, a, bone_rec)
+
 
 #Delay estimation
 #Compute cross correlation of air and bone recording
@@ -249,28 +258,28 @@ axes[0,1].grid(True)
 ref_val = np.max([np.max(np.abs(N_air_PSD)), np.max(np.abs(Pxx_air))])
 
 axes[1,0].plot(f_air, Pxx_air_dB)
-axes[1,0].plot(f_air,10*np.log10(np.abs(N_air_PSD)/ref_val))
-axes[1,0].plot(f_air,Pxx_air_new_dB)
+# axes[1,0].plot(f_air,10*np.log10(np.abs(N_air_PSD)/ref_val))
+# axes[1,0].plot(f_air,Pxx_air_new_dB)
 axes[1,0].set_title("Air Mic Spectrum")
 axes[1,0].set_ylabel("Power Spectral Density [dB]")
 axes[1,0].set_xlabel("Frequency [Hz]")
 axes[1,0].set_xlim([0,2000])
-# axes[1,0].set_ylim([-20, 0])
+axes[1,0].set_ylim([-30, 0])
 axes[1,0].grid(True)
-axes[1,0].legend(["PSD","Noise PSD", "Speech - Noise PSD"])
+# axes[1,0].legend(["PSD","Noise PSD", "Speech - Noise PSD"])
 
 #Bone Microphone spectrum
 
 axes[1,1].plot(f_bone, Pxx_bone_dB, color = green)
-axes[1,1].plot(f_bone,10*np.log10(np.abs(N_bone_PSD)/ref_val))
-axes[1,1].plot(f_bone,Pxx_bone_new_dB)
+# axes[1,1].plot(f_bone,10*np.log10(np.abs(N_bone_PSD)/ref_val))
+# axes[1,1].plot(f_bone,Pxx_bone_new_dB)
 axes[1,1].set_title("Bone Mic Spectrum")
 axes[1,1].set_ylabel("Power Spectral Density [dB]")
 axes[1,1].set_xlabel("Frequency [Hz]")
 axes[1,1].set_xlim([0,2000])
-# axes[1,1].set_ylim([-20, 0])
+axes[1,1].set_ylim([-30, 0])
 axes[1,1].grid(True)
-axes[1,1].legend(["PSD","Noise PSD", "Speech - Noise PSD"])
+# axes[1,1].legend(["PSD","Noise PSD", "Speech - Noise PSD"])
 
 #Set up freq and time axes for spectrogram
 freqs = lr.fft_frequencies(sr = Fs, n_fft = n_window)
