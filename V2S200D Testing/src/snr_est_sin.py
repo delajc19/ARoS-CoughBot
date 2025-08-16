@@ -104,7 +104,7 @@ def calculate_snr(filename):
     
 
 #Select audio file
-audio_dir = "..\\stereo recordings\\"
+audio_dir = "H:\My Drive\ARoS Lab\stereo recordings"
 
 if not os.path.exists(audio_dir):
     raise FileNotFoundError(f"Directory does not exist: {os.path.abspath(audio_dir)}")

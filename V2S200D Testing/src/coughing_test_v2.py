@@ -8,7 +8,7 @@ import sounddevice as sd
 from scipy.io.wavfile import write
 
 
-recs_dir = "../stereo recordings"
+recs_dir = "H:\My Drive\ARoS Lab\stereo recordings"
 os.makedirs(recs_dir, exist_ok=True)
 
 #Find input and output devices

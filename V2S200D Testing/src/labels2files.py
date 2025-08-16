@@ -8,9 +8,9 @@ from scipy.io import wavfile
 # === CONFIG ===
 label_file = "clavicle labels.txt"           # Your label file
 label_dir = "../labels/7-18-25 preliminary BCM placement testing/raw_labels"
-audio_dir = "../stereo recordings"
+audio_dir = "H:\My Drive\ARoS Lab\stereo recordings"
 audio_file = "7-18-25 BCM clavicle placement fullrecording.wav"       # Your audio file
-output_dir = "../stereo recordings"             # Output folder
+output_dir = "H:\My Drive\ARoS Lab\stereo recordings"             # Output folder
 
 # === LOAD AUDIO ===
 sr, audio = wavfile.read(os.path.join(audio_dir,audio_file))

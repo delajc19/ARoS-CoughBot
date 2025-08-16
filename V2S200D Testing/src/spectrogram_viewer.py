@@ -46,10 +46,10 @@ def select_audio_files(n, title="Select a Stereo Audio File"):
         raise ValueError(f"Expected {n} files, but got {len(file_path)}")
     return file_path
 
-def sensor_spectral_noise(n_window, window, hop_length):
-    Fs, stereonoise = read("../stereo recordings/silence.wav")
-    n_air = normalize_audio(stereonoise[:,1],dtype = stereonoise.dtype)
-    n_bone = normalize_audio(stereonoise[:,0],dtype = stereonoise.dtype)
+def sensor_spectral_noise(n_window, window, hop_length, gain):
+    Fs, stereonoise = read("H:\My Drive\ARoS Lab\stereo recordingssilence.wav")
+    n_air = gain*normalize_audio(stereonoise[:,1],dtype = stereonoise.dtype)
+    n_bone = gain*normalize_audio(stereonoise[:,0],dtype = stereonoise.dtype)
 
     _, N_air_PSD = signal.welch(n_air, Fs, nperseg = n_window, window = window, noverlap=n_window//4)
     _, N_bone_PSD = signal.welch(n_bone, Fs, nperseg = n_window, window = window, noverlap=n_window//4)
@@ -86,18 +86,6 @@ def butter_bp(lowcut, highcut, fs, order):
     
 
 #Select audio file
-# audio_dir = "..\\stereo recordings\\"
-
-# if not os.path.exists(audio_dir):
-#     raise FileNotFoundError(f"Directory does not exist: {os.path.abspath(audio_dir)}")
-
-# #List files
-# file_list = os.listdir(audio_dir)
-# num_files = len(file_list)
-
-# for i in range(num_files):
-#     print(f"{i+1} {file_list[i]}")
-
 
 filename = select_audio_files(n = 1)[0]
 
@@ -139,7 +127,7 @@ alpha = 0.7 #filter influence
 bone_rec = alpha*signal.filtfilt(b, a, x = bone_rec) + (1-alpha)*bone_rec
 
 #bandpass filter to focus analysis window
-b, a = butter_bp(60,3000,Fs,5)
+b, a = butter_bp(60,8000,Fs,5)
 air_rec = signal.filtfilt(b, a, air_rec)
 bone_rec= signal.filtfilt(b, a, bone_rec)
 
@@ -153,26 +141,32 @@ window = 'hann' #window type
 n_window = 16384    #window size
 hop_length = n_window // 4
 
-f_air, Pxx_air = signal.welch(air_rec, Fs, nperseg = n_window, window = window, noverlap=n_window//2)
-f_bone, Pxx_bone = signal.welch(bone_rec, Fs, nperseg = n_window, window = window, noverlap=n_window//2)
+f_air, Pxx_air = signal.welch(air_rec, Fs, nperseg = n_window, window = window, noverlap=n_window//4)
+f_bone, Pxx_bone = signal.welch(bone_rec, Fs, nperseg = n_window, window = window, noverlap=n_window//4)
+
+# #smooth PSDs
+# kernel = np.ones((n_window//2048,))
+# Pxx_air = np.convolve(Pxx_air, kernel, mode='same')
+# Pxx_bone = np.convolve(Pxx_bone, kernel, mode='same')
+
 
 #load noise spectra
-N_air_amp, N_air_PSD, N_bone_amp, N_bone_PSD = sensor_spectral_noise(n_window=n_window, window=window, hop_length=hop_length)
+N_air_amp, N_air_PSD, N_bone_amp, N_bone_PSD = sensor_spectral_noise(n_window=n_window, window=window, hop_length=hop_length, gain = 1)
 
 #Compute STFT for spectrogram
 Sxx_air = lr.stft(air_rec, window = window, n_fft = n_window, hop_length = hop_length)
 Sxx_bone = lr.stft(bone_rec, window = window, n_fft = n_window, hop_length = hop_length)
 
 #Subtract noise spectra
-Sxx_air = Sxx_air - N_air_amp
-Sxx_bone = Sxx_bone - N_bone_amp
+# Sxx_air = Sxx_air - N_air_amp
+# Sxx_bone = Sxx_bone - N_bone_amp
 
 Pxx_air_new = Pxx_air - N_air_PSD
 Pxx_bone_new = Pxx_bone - N_bone_PSD
 
 #convert after noise subtraction
-air_rec = lr.istft(Sxx_air, window = window, n_fft = n_window, hop_length = hop_length)
-bone_rec = lr.istft(Sxx_bone, window = window, n_fft = n_window, hop_length = hop_length)
+# air_rec = lr.istft(Sxx_air, window = window, n_fft = n_window, hop_length = hop_length)
+# bone_rec = lr.istft(Sxx_bone, window = window, n_fft = n_window, hop_length = hop_length)
 
 HSxx = Sxx_air/Sxx_bone
 
@@ -263,7 +257,7 @@ axes[1,0].plot(f_air, Pxx_air_dB)
 axes[1,0].set_title("Air Mic Spectrum")
 axes[1,0].set_ylabel("Power Spectral Density [dB]")
 axes[1,0].set_xlabel("Frequency [Hz]")
-axes[1,0].set_xlim([0,2000])
+axes[1,0].set_xlim([0,8000])
 axes[1,0].set_ylim([-30, 0])
 axes[1,0].grid(True)
 # axes[1,0].legend(["PSD","Noise PSD", "Speech - Noise PSD"])
@@ -276,7 +270,7 @@ axes[1,1].plot(f_bone, Pxx_bone_dB, color = green)
 axes[1,1].set_title("Bone Mic Spectrum")
 axes[1,1].set_ylabel("Power Spectral Density [dB]")
 axes[1,1].set_xlabel("Frequency [Hz]")
-axes[1,1].set_xlim([0,2000])
+axes[1,1].set_xlim([0,8000])
 axes[1,1].set_ylim([-30, 0])
 axes[1,1].grid(True)
 # axes[1,1].legend(["PSD","Noise PSD", "Speech - Noise PSD"])
@@ -303,6 +297,8 @@ axes[2,0].set_ylabel("Frequency [Hz]")
 # Bone microphone spectrogram (log freq axis)
 pcm2 = lr.display.specshow(Sxx_bone_dB,
                                 sr=Fs,
+                                hop_length = hop_length,
+                                n_fft = n_window,
                                 x_axis='time',
                                 y_axis='log',
                                 cmap=cmap,
@@ -328,25 +324,34 @@ fig.subplots_adjust(hspace = 0.3)
 #Add supertitle to display file name
 fig.suptitle(f"Currently viewing: {filename}")
 
-fig, axes = plt.subplots(2,1, figsize = (15,10))
-# axes[0].plot(f_air, Hxx_welch_dB)
-axes[0].plot(f_air, Hxx_avgstft_dB)
-# axes[0].plot(f_air, Hxx_welch_dB/Hxx_avgstft_dB[:,0])
-axes[0].set_xlabel("Frequency [Hz]")
-axes[0].set_ylabel("Amplitude Gain [dB]")
-axes[0].set_title("Transfer Function ACM/BCM")
-axes[0].legend()
-pcm3 = lr.display.specshow(HSxx_dB,
-                                sr=Fs,
-                                hop_length = hop_length,
-                                n_fft = n_window,
-                                x_axis='time',
-                                y_axis='log',
-                                cmap=cmap,
-                                ax=axes[1])
+# fig, axes = plt.subplots(2,1, figsize = (15,10))
+# # axes[0].plot(f_air, Hxx_welch_dB)
+# axes[0].plot(f_air, Hxx_avgstft_dB)
+# # axes[0].plot(f_air, Hxx_welch_dB/Hxx_avgstft_dB[:,0])
+# axes[0].set_xlabel("Frequency [Hz]")
+# axes[0].set_ylabel("Amplitude Gain [dB]")
+# axes[0].set_title("Transfer Function ACM/BCM")
+# axes[0].legend()
+# pcm3 = lr.display.specshow(HSxx_dB,
+#                                 sr=Fs,
+#                                 hop_length = hop_length,
+#                                 n_fft = n_window,
+#                                 x_axis='time',
+#                                 y_axis='log',
+#                                 cmap=cmap,
+#                                 ax=axes[1])
 
-fig.colorbar(pcm3, ax=axes[1], format='%+2.0f dB')
-fig.subplots_adjust(wspace = 0.3)
+# fig.colorbar(pcm3, ax=axes[1], format='%+2.0f dB')
+# fig.subplots_adjust(wspace = 0.3)
+
+# plt.figure(3)
+# w, h = signal.freqz(b, a, worN=8000)
+# freqs = w * Fs / (2 * np.pi)
+# plt.plot(freqs, 20 * np.log10(abs(h)))
+# plt.title("Bandpass Filter Frequency Response")
+# plt.xscale('log')
+# plt.grid()
+
 plt.show()
 
 

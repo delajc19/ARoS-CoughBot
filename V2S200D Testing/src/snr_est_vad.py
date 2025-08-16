@@ -62,7 +62,7 @@ def rms(signal):
     return np.sqrt(np.mean(signal**2))
 
 #Select audio file
-audio_dir = "..\\stereo recordings\\"
+audio_dir = "H:\My Drive\ARoS Lab\stereo recordings"
 
 if not os.path.exists(audio_dir):
     raise FileNotFoundError(f"Directory does not exist: {os.path.abspath(audio_dir)}")
@@ -119,7 +119,7 @@ bone_rec = signal.filtfilt(b, a, x = bone_rec)
 #initialize parameters for VAD
 frame_length = 40
 frame_shift = frame_length // 4
-energy_threshold = 0.005
+energy_threshold = 0.001
 pre_emphasis = 0.95
 
 #instantiate vad object
@@ -231,49 +231,49 @@ print(f"SNR bone = {SNR_bone:.2f}")
 outfile = np.zeros(audiofile.shape).astype(np.float32)
 outfile[:,0] = bone_rec.astype(np.float32)
 outfile[:,1] = output.astype(np.float32)
-audio_dir = "../stereo recordings"
+audio_dir = "H:\My Drive\ARoS Lab\stereo recordings"
 outfilename = f"VAD_{file_list[selection]}"
 write(os.path.join(audio_dir, outfilename), Fs, outfile)
 
 
 # %% Plots
-fig, axes = plt.subplots(3,1,sharex = True)
+# fig, axes = plt.subplots(3,1,sharex = True)
 
-plt.figure(1)
-fig.subplots_adjust(hspace = 0.5)
-t = np.linspace(0,tlen,int(48000*tlen))
-axes[0].plot(t,air_rec)
-axes[0].plot(t, air_rec, alpha=0.5)
-axes[0].fill_between(t, -1, 1, where=(active_air != 0), color='orange', alpha=0.2, label="VAD Active")
-axes[0].legend()
-axes[0].set_title('Input ACM Waveform')
-n = np.linspace(0,len(voice_activity)/100,len(voice_activity))
-axes[1].plot(n,mask)
-axes[1].set_title('VAD Mask from BCM data')
-axes[2].plot(t,output)
-axes[2].set_title('Output ACM Waveform')
-axes[2].set_ylim((-1,1))
+# plt.figure(1)
+# fig.subplots_adjust(hspace = 0.5)
+# t = np.linspace(0,tlen,int(48000*tlen))
+# axes[0].plot(t,air_rec)
+# axes[0].plot(t, air_rec, alpha=0.5)
+# axes[0].fill_between(t, -1, 1, where=(active_air != 0), color='orange', alpha=0.2, label="VAD Active")
+# axes[0].legend()
+# axes[0].set_title('Input ACM Waveform')
+# n = np.linspace(0,len(voice_activity)/100,len(voice_activity))
+# axes[1].plot(n,mask)
+# axes[1].set_title('VAD Mask from BCM data')
+# axes[2].plot(t,output)
+# axes[2].set_title('Output ACM Waveform')
+# axes[2].set_ylim((-1,1))
 
-fig2, axes2 = plt.subplots(2,1, sharex = True)
-plt.figure(2)
-axes2[0].plot(t,inactive_air)
-axes2[0].set_title("Air Recording Noise")
-axes2[0].set_ylim((-1,1))
-axes2[0].fill_between(t, -1, 1, where=(active_air != 0), color='orange', alpha=0.2, label="VAD Active")
-axes2[0].legend()
-axes2[1].plot(t,inactive_bone)
-axes2[1].set_title("Bone Recording Noise")
-axes2[1].set_ylim((-1,1))
-axes2[1].fill_between(t, -1, 1, where=(active_air != 0), color='orange', alpha=0.2, label="VAD Active")
-axes2[1].legend()
+# fig2, axes2 = plt.subplots(2,1, sharex = True)
+# plt.figure(2)
+# axes2[0].plot(t,inactive_air)
+# axes2[0].set_title("Air Recording Noise")
+# axes2[0].set_ylim((-1,1))
+# axes2[0].fill_between(t, -1, 1, where=(active_air != 0), color='orange', alpha=0.2, label="VAD Active")
+# axes2[0].legend()
+# axes2[1].plot(t,inactive_bone)
+# axes2[1].set_title("Bone Recording Noise")
+# axes2[1].set_ylim((-1,1))
+# axes2[1].fill_between(t, -1, 1, where=(active_air != 0), color='orange', alpha=0.2, label="VAD Active")
+# axes2[1].legend()
 
-plt.figure(3)
-nst = np.linspace(0,len(stitched_airspeech)/Fs, len(stitched_airspeech))
-plt.title('Concatenated Active Audio Segments')
-plt.ylim((-1,1))
-plt.plot(nst, stitched_airspeech)
+# plt.figure(3)
+# nst = np.linspace(0,len(stitched_airspeech)/Fs, len(stitched_airspeech))
+# plt.title('Concatenated Active Audio Segments')
+# plt.ylim((-1,1))
+# plt.plot(nst, stitched_airspeech)
 
 
-plt.show()
+# plt.show()
 
-sd.play(output, Fs)
+# sd.play(output, Fs)

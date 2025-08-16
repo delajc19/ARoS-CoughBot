@@ -22,6 +22,12 @@ def normalize_audio(audio, dtype):
     else:
         raise ValueError("Unsupported audio dtype")
 
+def butter_bp(lowcut, highcut, fs, order):
+    w1 = 2*lowcut / fs
+    w2 = 2*highcut/ fs
+    b, a = signal.butter(order,[w1, w2], btype = 'bandpass', analog = False)
+    return b, a
+    
 def compute_transfer_function(bone_x, bone_y, Fs, n_window=8092, hop_ratio=4):
     window = 'hann'
     hop_length = n_window // hop_ratio
@@ -31,12 +37,21 @@ def compute_transfer_function(bone_x, bone_y, Fs, n_window=8092, hop_ratio=4):
     bone_x = bone_x[:min_len]
     bone_y = bone_y[:min_len]
 
+    #Filter both to range 60-3000Hz
+    b,a = butter_bp(60,3000,Fs,order = 5)
+    bone_x = signal.filtfilt(b, a, bone_x)
+    bone_y = signal.filtfilt(b, a, bone_y)
+
     # STFT
     Sxx_x = lr.stft(bone_x, n_fft=n_window, hop_length=hop_length, window=window)
     Sxx_y = lr.stft(bone_y, n_fft=n_window, hop_length=hop_length, window=window)
     H_stft = np.abs(Sxx_x / (Sxx_y + 1e-10))
     H_avg = np.mean(H_stft, axis=1)
-    H_avg_dB = 20 * np.log10(H_avg / np.max(H_avg))
+
+    #average
+    kernel = np.ones((n_window//64,))
+    H_avg = np.convolve(a=H_avg, v=kernel,mode='same')
+    H_avg_dB = 10 * np.log10(H_avg / np.max(H_avg))
 
     freqs = lr.fft_frequencies(sr=Fs, n_fft=n_window)
     return freqs, H_avg_dB
@@ -78,8 +93,8 @@ def select_audio_files(n=4, title="Select 4 Stereo Audio Files"):
         raise ValueError(f"Expected {n} files, but got {len(file_paths)}")
     return file_paths
 
-# --------- Main Logic ---------
-audio_dir = "../stereo recordings"  # folder with stereo files
+#----------------------------------------------------------------------------------------
+audio_dir = "H:\My Drive\ARoS Lab\stereo recordings"  # folder with stereo files
 files = select_audio_files()
 Fs_list, stereo_data = zip(*[read(f) for f in files])
 Fs = Fs_list[0]
@@ -113,6 +128,9 @@ air_mics = truncate_to_same_length(air_mics)
 pairs = [(i, j) for i in range(4) for j in range(4) if i != j]
 names = ['chest', 'clavicle', 'head', 'throat']
 truncate_to_same_length(bone_mics)
+
+#set up averaging
+kernel = np.ones((5,))
 
 # Create plots
 fig, axes = plt.subplots(4, 1, figsize=(14, 14), sharex=True)
@@ -172,6 +190,8 @@ for numerator_idx in range(4):
     ax.legend()
 
 axes[-1].set_xlabel("Frequency [Hz]")
+# axes[-1].set_xlim([0,2000])
+# axes[-1].set_ylim([-50,0])
 fig.suptitle("Air Mic Placement Transfer Functions", fontsize=16)
 fig.tight_layout(rect=[0, 0, 1, 0.97])
 plt.show()
