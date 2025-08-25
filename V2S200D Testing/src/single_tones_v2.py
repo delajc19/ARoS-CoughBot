@@ -37,7 +37,7 @@ duration = 4 #8 second recording (duration + duration)
 channels = 2 #Stereo recording
 
 #Generate a sinusoid at each frequency in Hz, playing for a 5 sec duration
-frequencies = [100, 500, 1000, 2000, 3000, 5000, 7000, 10000]
+frequencies = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
 all_tones = []
 
 print("Beginning test.")
@@ -61,6 +61,6 @@ for f_i in frequencies:
     #File naming scheme: Noise level _ Sound
         #Noise levels: Quiet, Low Noise, High Noise
         #Sounds: Single Tone (freq [Hz])
-    write(filename = os.path.join(recs_dir, f"HN_ST{f_i}Hz.wav"), rate = Fs, data = recording)
+    # write(filename = os.path.join(recs_dir, f"HN_ST{f_i}Hz.wav"), rate = Fs, data = recording)
 
 print("Test complete!")
