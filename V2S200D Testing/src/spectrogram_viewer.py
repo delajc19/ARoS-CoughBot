@@ -248,7 +248,7 @@ axes[0,0].grid(True)
 #Bone microphone waveform 
 green = (29/255, 188/255, 117/255)
 axes[0,1].plot(t_x, bone_rec, color = green)
-axes[0,1].set_title("V2S200D Bone Conduction Mic Waveform")
+axes[0,1].set_title("Bone Conduction Mic Waveform")
 axes[0,1].set_ylabel("D")
 axes[0,1].set_ylim([-1.0,1.0])
 axes[0,1].grid(True)
